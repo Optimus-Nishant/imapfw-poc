@@ -34,7 +34,7 @@ class Message(object):
 
 class Messages(UserList):
     """Enable collections of messages the easy way."""
-   pass
+    pass
 
 
 class Driver(object):
