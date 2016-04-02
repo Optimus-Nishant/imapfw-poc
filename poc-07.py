@@ -146,7 +146,9 @@ class StateController(object):
 
         #TODO: we have to read both states to know what to sync. The current
         # implementation is wrong.
-        stateMessages += self.theirState.search()
+        for message in self.theirState.search():
+            if message not in stateMessages:
+                stateMessages.append(message)
 
         for message in messages:
             if message not in stateMessages:
