@@ -54,30 +54,59 @@ class Messages(UserList):
     pass #TODO: implement collection comparison.
 
 
-#TODO: fake writes on disk.
-class Driver(object):
-    """Fake a driver."""
+# Fake any backend. Allows making this PoC more simple.
+class Storage(object):
     def __init__(self, list_messages):
         self.messages = Messages(list_messages) # Fake the real data.
 
     def search(self):
         return self.messages
 
-    def update(self, messages):
+    def update(self, newMessage):
         """Update the storage.
 
-        messages: is the collection of messages we have to create, update
-        or remove."""
+        newMessage: messages we have to create, update or remove."""
 
-        pass #TODO
+        #FIXME: If we provide try to update leftside first it will be updated as
+        # per right side changes provided by Engine.  For Example: m2l is marked
+        # read and m2r is unread. Now when we are first trying to update left
+        # side with changes. We are making it unread on both the side.  Where as
+        # if we first update right side we will have m2l as well as m2r as read.
+        # same goes for removal. Lets say there is m4l but m4r is missing . So
+        # what should we do should we remove m4l or what.
+
+        #FIXME: updates and new messages are handled. Not the deletions.
+
+        if newMessage not in self.messages:
+            self.messages.append(newMessage)
+            return
+
+        for message in self.messages:
+            if message.uid == newMessage.uid:
+                # Update message.
+                message.body = newMessage.body
+                message.flags = newMessage.flags
+                return
+
+        assert("should never hit this point")
 
 
-# Not a driver but APIs interesting here are similar.
 #TODO: fake reads and writes on disk.
-class StateBackend(Driver):
+class StateDriver(Storage):
     """Would run in a worker."""
-    def __init__(self):
-        self.messages = Messages() # Fake the real data.
+
+    def update(self, message):
+        """StateDriver Must Contain MetaData for last synced messages rather
+        than messages.  For now we are putting messages."""
+
+        #TODO: we have to later think of its implementation and format.
+        super(StateDriver, self).update(message)
+
+
+#TODO: fake writes on disk.
+class Driver(Storage):
+    """Fake a driver."""
+    pass
 
 
 class StateController(object):
@@ -89,17 +118,24 @@ class StateController(object):
     The state controller is supposed to communicate with:
         - our driver;
         - the engine;
-        - our state backend;
-        - their state backend (read-only).
+        - our state backend (read-only);
+        - their state backend.
     """
 
-    def __init__(self, driver):
+    def __init__(self, driver, ourState, theirState):
         self.driver = driver # The driver we own.
-        self.state = StateBackend() # Would be an emitter.
+        self.state = ourState
+        self.theirState = theirState
 
     def update(self, theirMessages):
         """Update this side with the messages from the other side."""
-        pass #TODO: compare their messages with what we have in this repository.
+
+        for theirMessage in theirMessages:
+            try:
+                self.driver.update(theirMessage)
+                self.theirState.update(theirMessage) # Would be async.
+            except:
+                raise # Would handle or warn.
 
     def search(self):
         """Explore our messages. Only return changes since previous sync."""
@@ -107,6 +143,12 @@ class StateController(object):
         changedMessages = Messages() # Collection of new, deleted and updated messages.
         messages = self.driver.search() # Would be async.
         stateMessages = self.state.search() # Would be async.
+
+        #TODO: we have to read both states to know what to sync. The current
+        # implementation is wrong.
+        for message in self.theirState.search():
+            if message not in stateMessages:
+                stateMessages.append(message)
 
         for message in messages:
             if message not in stateMessages:
@@ -117,6 +159,7 @@ class StateController(object):
                     if message.uid == stateMessage.uid:
                         if not message.identical(stateMessage):
                             changedMessages.append(message)
+                            break #There is no point of iterating further.
 
         for stateMessage in stateMessages:
             if stateMessage not in messages:
@@ -129,26 +172,28 @@ class StateController(object):
 class Engine(object):
     """The engine."""
     def __init__(self, left, right):
+        leftState = StateDriver([]) # Would be an emitter.
+        rightState = StateDriver([]) # Would be an emitter.
         # Add the state controller to the chain of controllers of the drivers.
         # Driver will need to provide API to work on chained controllers.
-        self.left = StateController(left)
-        self.right = StateController(right)
+        self.left = StateController(left, leftState, rightState)
+        self.right = StateController(right, rightState, leftState)
 
     def debug(self, title):
         print('\n')
         print(title)
-        print("rght:       %s"% self.right.driver.messages)
-        print("state rght: %s"% self.right.state.messages)
         print("left:       %s"% self.left.driver.messages)
         print("state left: %s"% self.left.state.messages)
+        print("rght:       %s"% self.right.driver.messages)
+        print("state rght: %s"% self.right.state.messages)
 
     def run(self):
         leftMessages = self.left.search() # Would be async.
         rightMessages = self.right.search() # Would be async.
 
-        print("New, deleted and updated messages")
-        print("left: %s"% leftMessages)
-        print("rght: %s"% rightMessages)
+        print("Changes:")
+        print("- from left: %s"% leftMessages)
+        print("- from rght: %s"% rightMessages)
 
         self.left.update(rightMessages)
         self.right.update(leftMessages)
@@ -158,17 +203,19 @@ if __name__ == '__main__':
 
     # Messages
     m1r = Message(1, "1 body")
-    m1l = Message(1, "1 body") # Same as m1r
+    m1l = Message(1, "1 body") # Same as m1r.
 
     m2r = Message(2, "2 body")
-    m2l = Message(2, "2 body")
-    m2l.markRead()              # Same as m2r but read.
+    m2l = Message(2, "2 body") # Same as m2r.
+    #TODO: first sync when one side is not empty.
+    # m2l.markRead()              # Same as m2r but read.
 
     m3r = Message(3, "3 body") # Not at left.
 
-    m4l = Message(None, "4 body") # Not at right.
+    #TODO: None UID is meant for new messages in Maildir.
+    # m4l = Message(None, "4 body") # Not at right.
 
-    leftMessages = Messages([m1l, m2l, m4l])
+    leftMessages = Messages([m1l, m2l])
     rghtMessages = Messages([m1r, m2r, m3r])
 
     # Fill both sides with pre-existing data.
@@ -183,6 +230,8 @@ if __name__ == '__main__':
     engine.run()
     engine.debug("Run of PASS 1: done.")
 
-    #TODO: PASS 2 with same content to validate noop.
+    print("\n# PASS 2")
+    engine.run()
+    engine.debug("Run of PASS 2: done.")
 
     #TODO: PASS 3 with changed messages.
