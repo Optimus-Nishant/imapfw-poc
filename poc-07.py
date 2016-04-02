@@ -65,13 +65,36 @@ class Driver(object):
 
     def update(self, messages):
         """Update the storage.
-
         messages: is the collection of messages we have to create, update
         or remove."""
 
-        pass #TODO
-
-
+        """
+        Bug: If we provide try to update leftside first it will be updated as per right side changes provided by Engine. 
+             For Example: m2l is marked read and m2r is unread. Now when we are first trying to update left side 
+             with changes. We are making it unread on both the side.
+             Where as if we first update right side we will have m2l as well as m2r as read.
+             same goes for removal. Lets say there is m4l but m4r is missing . So what should we do should we remove m4l
+             or what.
+        """
+        for message in messages:
+            if message not in self.messages:
+                self.messages.append(message)  #Adding new message to the sel.messages storage
+            else: 
+                for s_message  in self.messages:            
+                    if message.uid == s_message.uid and message.identical(s_message):
+                        break   
+                        """
+                        Message found in self.messages and is identical. 
+                        No need to search for message in self.messages and hence get out of loop
+                        """
+                    elif message.uid == s_message.uid and not message.identical(s_message):
+                        """
+                        Updating the message.
+                        """
+                        s_message.body = message.body
+                        s_message.flags = message.flags
+                        break     
+        
 # Not a driver but APIs interesting here are similar.
 #TODO: fake reads and writes on disk.
 class StateBackend(Driver):
@@ -79,6 +102,13 @@ class StateBackend(Driver):
     def __init__(self):
         self.messages = Messages() # Fake the real data.
 
+    def update(self,mess):
+        self.messages = mess
+
+    """
+        StateBackend Must Contain MetaData for last synced messages rather than messages.
+        For now we are putting messages. WE HAVE TO LATER THINK OF ITS IMPLEMENTATION.
+    """
 
 class StateController(object):
     """State controller for a driver.
@@ -91,15 +121,18 @@ class StateController(object):
         - the engine;
         - our state backend;
         - their state backend (read-only).
+        #Comment Nishant : I think State Controller is supposed to communicate with thier state backend 
+        (write - Only)
     """
 
     def __init__(self, driver):
         self.driver = driver # The driver we own.
         self.state = StateBackend() # Would be an emitter.
 
-    def update(self, theirMessages):
+    def update(self, theirMessages, theirstate):
         """Update this side with the messages from the other side."""
-        pass #TODO: compare their messages with what we have in this repository.
+        self.driver.update(theirMessages)
+        theirstate.update(self.driver.messages)
 
     def search(self):
         """Explore our messages. Only return changes since previous sync."""
@@ -117,6 +150,7 @@ class StateController(object):
                     if message.uid == stateMessage.uid:
                         if not message.identical(stateMessage):
                             changedMessages.append(message)
+                            break #There is no point of iterating further.
 
         for stateMessage in stateMessages:
             if stateMessage not in messages:
@@ -150,8 +184,8 @@ class Engine(object):
         print("left: %s"% leftMessages)
         print("rght: %s"% rightMessages)
 
-        self.left.update(rightMessages)
-        self.right.update(leftMessages)
+        self.left.update(rightMessages,self.right.state)
+        self.right.update(leftMessages,self.left.state)
 
 
 if __name__ == '__main__':
@@ -183,6 +217,8 @@ if __name__ == '__main__':
     engine.run()
     engine.debug("Run of PASS 1: done.")
 
-    #TODO: PASS 2 with same content to validate noop.
+    print("\n# PASS 2")
+    engine.run()
+    engine.debug("Run of PASS 2: done.")
 
     #TODO: PASS 3 with changed messages.
