@@ -6,9 +6,11 @@
 from functools import total_ordering
 from collections import UserList
 
+
 @total_ordering
 class Message(object):
     """Fake the real Message class."""
+
     def __init__(self, uid=None, body=None, flags=None):
         self.uid = uid
         self.body = body
@@ -54,7 +56,7 @@ class Messages(UserList):
     pass #TODO: implement collection comparison.
 
 
-# Fake any backend. Allows making this PoC more simple.
+# Fake any storage. Allows making this PoC more simple.
 class Storage(object):
     def __init__(self, list_messages):
         self.messages = Messages(list_messages) # Fake the real data.
@@ -91,7 +93,6 @@ class Storage(object):
         assert("should never hit this point")
 
 
-#TODO: fake reads and writes on disk.
 class StateDriver(Storage):
     """Would run in a worker."""
 
@@ -103,7 +104,8 @@ class StateDriver(Storage):
         super(StateDriver, self).update(message)
 
 
-#TODO: fake writes on disk.
+#TODO: fake real drivers.
+#TODO: Assign UID when storage is IMAP.
 class Driver(Storage):
     """Fake a driver."""
     pass
@@ -137,6 +139,9 @@ class StateController(object):
             except:
                 raise # Would handle or warn.
 
+    #FIXME: we are lying around. The real search() should return full
+    # messages or have parameter to set what we request exactly.
+    # For the sync we need to know what was changed.
     def search(self):
         """Explore our messages. Only return changes since previous sync."""
 
@@ -175,7 +180,7 @@ class Engine(object):
         leftState = StateDriver([]) # Would be an emitter.
         rightState = StateDriver([]) # Would be an emitter.
         # Add the state controller to the chain of controllers of the drivers.
-        # Driver will need to provide API to work on chained controllers.
+        # Real driver might need API to work on chained controllers.
         self.left = StateController(left, leftState, rightState)
         self.right = StateController(right, rightState, leftState)
 
@@ -191,13 +196,14 @@ class Engine(object):
         leftMessages = self.left.search() # Would be async.
         rightMessages = self.right.search() # Would be async.
 
-        print("Changes:")
+        print("## Changes:")
         print("- from left: %s"% leftMessages)
         print("- from rght: %s"% rightMessages)
 
         self.left.update(rightMessages)
         self.right.update(leftMessages)
 
+        print("\n## Update done.")
 
 if __name__ == '__main__':
 
@@ -207,7 +213,8 @@ if __name__ == '__main__':
 
     m2r = Message(2, "2 body")
     m2l = Message(2, "2 body") # Same as m2r.
-    #TODO: first sync when one side is not empty.
+    #TODO: first sync when one side is not empty or identical.
+    # Supporting this feature is really challenging!
     # m2l.markRead()              # Same as m2r but read.
 
     m3r = Message(3, "3 body") # Not at left.
@@ -228,10 +235,10 @@ if __name__ == '__main__':
 
     print("\n# PASS 1")
     engine.run()
-    engine.debug("Run of PASS 1: done.")
+    engine.debug("# Run of PASS 1: done.")
 
     print("\n# PASS 2")
     engine.run()
-    engine.debug("Run of PASS 2: done.")
+    engine.debug("# Run of PASS 2: done.")
 
     #TODO: PASS 3 with changed messages.
