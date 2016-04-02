@@ -1,4 +1,7 @@
+# Game 1
 1. Implement message compariosn
 2. create methods for Message class like markRead, unmardRead, markImportant,
    unmark important
-3. Improving doc
+
+# Game 2
+1. Completing StateController.update()
