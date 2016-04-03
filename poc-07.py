@@ -142,7 +142,7 @@ class StateController(object):
     #FIXME: we are lying around. The real search() should return full
     # messages or have parameter to set what we request exactly.
     # For the sync we need to know what was changed.
-    def search(self):
+    def getChanges(self):
         """Explore our messages. Only return changes since previous sync."""
 
         changedMessages = Messages() # Collection of new, deleted and updated messages.
@@ -193,8 +193,8 @@ class Engine(object):
         print("state rght: %s"% self.right.state.messages)
 
     def run(self):
-        leftMessages = self.left.search() # Would be async.
-        rightMessages = self.right.search() # Would be async.
+        leftMessages = self.left.getChanges() # Would be async.
+        rightMessages = self.right.getChanges() # Would be async.
 
         print("## Changes:")
         print("- from left: %s"% leftMessages)
