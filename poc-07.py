@@ -15,6 +15,11 @@ class Message(object):
         self.uid = uid
         self.body = body
         self.flags = {'read': False, 'important': False}
+        # changes stores what was changed:
+        # True: addition
+        # False: deletion
+        # None: no change
+        self.changes = {'read': None, 'important': None}
 
     def __repr__(self):
         return "<Message %s [%s] '%s'>"% (self.uid, self.flags, self.body)
@@ -28,15 +33,33 @@ class Message(object):
     def __lt__(self, other):
         return self.uid < other
 
-    def identical(self, mess):
-        if mess.uid != self.uid:
+    def identical(self, message):
+        if message.uid != self.uid:
             return False
-        if mess.body != self.body:
+        if message.body != self.body:
             return False
-        if mess.flags != self.flags:
+        if message.flags != self.flags:
             return False
 
         return True # Identical
+
+    def isImportant(self):
+        return self.flags['important']
+
+    def isRead(self):
+        return self.flags['read']
+
+    def learnChanges(self, baseMessage):
+        """Learn what was changed is which way."""
+
+        if self.isImportant() != baseMessage.isImportant():
+            self.changes['important'] = self.isImportant()
+
+        if self.isRead() != baseMessage.isRead():
+            self.changes['read'] = self.isRead()
+
+    def readChanges(self):
+        return self.changes
 
     def markImportant(self):
         self.flags['important'] = True
@@ -116,7 +139,6 @@ class StateController(object):
 
     Notice each state controller owns a driver and is the stranger of the other
     side.
-
     The state controller is supposed to communicate with:
         - our driver;
         - the engine;
