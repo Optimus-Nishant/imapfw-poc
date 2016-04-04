@@ -11,15 +11,15 @@ from collections import UserList
 class Message(object):
     """Fake the real Message class."""
 
-    def __init__(self, uid=None, body=None, flags=None):
+    def __init__(self, uid=None, body=None):
         self.uid = uid
         self.body = body
         self.flags = {'read': False, 'important': False}
-        # changes stores what was changed:
-        # True: addition
-        # False: deletion
-        # None: no change
-        self.changes = {'read': None, 'important': None}
+        # Store what was changed. Flags can be:
+        # - True: addition
+        # - False: deletion
+        # - None: no change
+        self.changes = {'read': None, 'important': None, 'deleted': False}
 
     def __repr__(self):
         return "<Message %s [%s] '%s'>"% (self.uid, self.flags, self.body)
@@ -32,6 +32,9 @@ class Message(object):
 
     def __lt__(self, other):
         return self.uid < other
+
+    def getChanges(self):
+        return self.changes
 
     def identical(self, message):
         if message.uid != self.uid:
@@ -49,23 +52,23 @@ class Message(object):
     def isRead(self):
         return self.flags['read']
 
-    def learnChanges(self, baseMessage):
+    def learnChanges(self, stateMessage):
         """Learn what was changed is which way."""
 
-        if self.isImportant() != baseMessage.isImportant():
+        if self.isImportant() != stateMessage.isImportant():
             self.changes['important'] = self.isImportant()
 
-        if self.isRead() != baseMessage.isRead():
+        if self.isRead() != stateMessage.isRead():
             self.changes['read'] = self.isRead()
-
-    def readChanges(self):
-        return self.changes
 
     def markImportant(self):
         self.flags['important'] = True
 
     def markRead(self):
         self.flags['read'] = True
+
+    def setDeleted(self):
+        self.changes['deleted'] = True
 
     def unmarkImportant(self):
         self.flags['important'] = False
@@ -139,6 +142,7 @@ class StateController(object):
 
     Notice each state controller owns a driver and is the stranger of the other
     side.
+
     The state controller is supposed to communicate with:
         - our driver;
         - the engine;
