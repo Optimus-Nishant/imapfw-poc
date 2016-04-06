@@ -5,6 +5,7 @@
 
 from functools import total_ordering
 from collections import UserList
+from copy import deepcopy
 
 
 @total_ordering
@@ -106,7 +107,7 @@ class Storage(object):
         #FIXME: updates and new messages are handled. Not the deletions.
 
         if newMessage not in self.messages:
-            self.messages.append(newMessage)
+            self.messages.append(deepcopy(newMessage))
             return
 
         for message in self.messages:
@@ -179,23 +180,23 @@ class StateController(object):
         # implementation is wrong.
         for message in self.theirState.search():
             if message not in stateMessages:
-                stateMessages.append(message)
+                stateMessages.append(deepcopy(message))
 
         for message in messages:
             if message not in stateMessages:
                 # Missing in the other side.
-                changedMessages.append(message)
+                changedMessages.append(deepcopy(message))
             else:
                 for stateMessage in stateMessages:
                     if message.uid == stateMessage.uid:
                         if not message.identical(stateMessage):
-                            changedMessages.append(message)
+                            changedMessages.append(deepcopy(message))
                             break #There is no point of iterating further.
 
         for stateMessage in stateMessages:
             if stateMessage not in messages:
                 # TODO: mark message as destroyed from real repository.
-                changedMessages.append(message)
+                changedMessages.append(deepcopy(message))
 
         return changedMessages
 
@@ -262,6 +263,8 @@ if __name__ == '__main__':
     print("\n# PASS 1")
     engine.run()
     engine.debug("# Run of PASS 1: done.")
+    m2r.markImportant()
+    engine.debug("# After Run1 but before Run 2")
 
     print("\n# PASS 2")
     engine.run()
