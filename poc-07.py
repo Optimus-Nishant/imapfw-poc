@@ -128,7 +128,7 @@ class StateDriver(Storage):
         than messages.  For now we are putting messages."""
 
         #TODO: we have to later think of its implementation and format.
-        super(StateDriver, self).update(message)
+        super(StateDriver, self).update(deepcopy(message))
 
 
 #TODO: fake real drivers.
@@ -162,9 +162,13 @@ class StateController(object):
         for theirMessage in theirMessages:
             try:
                 self.driver.update(theirMessage)
-                self.theirState.update(theirMessage) # Would be async.
             except:
                 raise # Would handle or warn.
+      
+        #Their state must be populated with the content of our driver.
+	#FIXME:Later on, update their state with metadata of our Driver messages.
+        for message in self.driver.search():
+            self.theirState.update(message)
 
     #FIXME: we are lying around. The real search() should return full
     # messages or have parameter to set what we request exactly.
@@ -178,10 +182,9 @@ class StateController(object):
 
         #TODO: we have to read both states to know what to sync. The current
         # implementation is wrong.
-        for message in self.theirState.search():
-            if message not in stateMessages:
-                stateMessages.append(deepcopy(message))
-
+	#FIXED: I think there is no point of comparing this.
+	#As after the sync the two states must be identical.
+       
         for message in messages:
             if message not in stateMessages:
                 # Missing in the other side.
@@ -264,10 +267,22 @@ if __name__ == '__main__':
     engine.run()
     engine.debug("# Run of PASS 1: done.")
     m2r.markImportant()
-    engine.debug("# After Run1 but before Run 2")
 
     print("\n# PASS 2")
     engine.run()
     engine.debug("# Run of PASS 2: done.")
 
-    #TODO: PASS 3 with changed messages.
+    #TODO: PASS 3 without update.
+    print ("\n# Pass 3")
+    engine.run()
+    engine.debug("# Run of PASS 3: done.")
+
+    #PASS 4 with update
+    print ("\n# Pass 4")
+    m1l.markRead()
+    engine.run()
+    engine.debug("# Run of PASS 4: done.")
+
+    #PASS 5 without any update
+    engine.run()
+    engine.debug("# Run of PASS 5: done.")
