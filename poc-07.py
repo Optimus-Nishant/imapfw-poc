@@ -5,16 +5,22 @@
 
 from functools import total_ordering
 from collections import UserList
+from copy import deepcopy
 
 
 @total_ordering
 class Message(object):
     """Fake the real Message class."""
 
-    def __init__(self, uid=None, body=None, flags=None):
+    def __init__(self, uid=None, body=None):
         self.uid = uid
         self.body = body
         self.flags = {'read': False, 'important': False}
+        # Store what was changed. Flags can be:
+        # - True: addition
+        # - False: deletion
+        # - None: no change
+        self.changes = {'read': None, 'important': None, 'deleted': False}
 
     def __repr__(self):
         return "<Message %s [%s] '%s'>"% (self.uid, self.flags, self.body)
@@ -28,21 +34,42 @@ class Message(object):
     def __lt__(self, other):
         return self.uid < other
 
-    def identical(self, mess):
-        if mess.uid != self.uid:
+    def getChanges(self):
+        return self.changes
+
+    def identical(self, message):
+        if message.uid != self.uid:
             return False
-        if mess.body != self.body:
+        if message.body != self.body:
             return False
-        if mess.flags != self.flags:
+        if message.flags != self.flags:
             return False
 
         return True # Identical
+
+    def isImportant(self):
+        return self.flags['important']
+
+    def isRead(self):
+        return self.flags['read']
+
+    def learnChanges(self, stateMessage):
+        """Learn what was changed is which way."""
+
+        if self.isImportant() != stateMessage.isImportant():
+            self.changes['important'] = self.isImportant()
+
+        if self.isRead() != stateMessage.isRead():
+            self.changes['read'] = self.isRead()
 
     def markImportant(self):
         self.flags['important'] = True
 
     def markRead(self):
         self.flags['read'] = True
+
+    def setDeleted(self):
+        self.changes['deleted'] = True
 
     def unmarkImportant(self):
         self.flags['important'] = False
@@ -80,7 +107,7 @@ class Storage(object):
         #FIXME: updates and new messages are handled. Not the deletions.
 
         if newMessage not in self.messages:
-            self.messages.append(newMessage)
+            self.messages.append(deepcopy(newMessage))
             return
 
         for message in self.messages:
@@ -142,7 +169,7 @@ class StateController(object):
     #FIXME: we are lying around. The real search() should return full
     # messages or have parameter to set what we request exactly.
     # For the sync we need to know what was changed.
-    def search(self):
+    def getChanges(self):
         """Explore our messages. Only return changes since previous sync."""
 
         changedMessages = Messages() # Collection of new, deleted and updated messages.
@@ -153,23 +180,23 @@ class StateController(object):
         # implementation is wrong.
         for message in self.theirState.search():
             if message not in stateMessages:
-                stateMessages.append(message)
+                stateMessages.append(deepcopy(message))
 
         for message in messages:
             if message not in stateMessages:
                 # Missing in the other side.
-                changedMessages.append(message)
+                changedMessages.append(deepcopy(message))
             else:
                 for stateMessage in stateMessages:
                     if message.uid == stateMessage.uid:
                         if not message.identical(stateMessage):
-                            changedMessages.append(message)
+                            changedMessages.append(deepcopy(message))
                             break #There is no point of iterating further.
 
         for stateMessage in stateMessages:
             if stateMessage not in messages:
                 # TODO: mark message as destroyed from real repository.
-                changedMessages.append(message)
+                changedMessages.append(deepcopy(message))
 
         return changedMessages
 
@@ -193,8 +220,8 @@ class Engine(object):
         print("state rght: %s"% self.right.state.messages)
 
     def run(self):
-        leftMessages = self.left.search() # Would be async.
-        rightMessages = self.right.search() # Would be async.
+        leftMessages = self.left.getChanges() # Would be async.
+        rightMessages = self.right.getChanges() # Would be async.
 
         print("## Changes:")
         print("- from left: %s"% leftMessages)
@@ -236,6 +263,8 @@ if __name__ == '__main__':
     print("\n# PASS 1")
     engine.run()
     engine.debug("# Run of PASS 1: done.")
+    m2r.markImportant()
+    engine.debug("# After Run1 but before Run 2")
 
     print("\n# PASS 2")
     engine.run()
